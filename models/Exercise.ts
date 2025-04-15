@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 
 import db from '../db/db';
 
-interface Exercise {
+export interface Exercise {
   userId: string;
   description: string;
   duration: number;
@@ -17,8 +17,8 @@ ExerciseInstance.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: {
-        // model: 'users',
-        // key: 'id',
+        model: 'users',
+        key: 'id',
       },
     },
     description: {

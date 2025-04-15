@@ -1,2 +1,2 @@
-export { ExerciseInstance } from "./Exercise";
-export { UserInstance } from './User'
+export { Exercise, ExerciseInstance } from "./Exercise";
+export { User, UserInstance } from './User'

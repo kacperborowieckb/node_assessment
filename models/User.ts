@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 
 import db from '../db/db';
 
-interface User {
+export interface User {
   id: string;
   username: string;
 }
@@ -19,6 +19,7 @@ UserInstance.init(
     username: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true
     },
   },
   {

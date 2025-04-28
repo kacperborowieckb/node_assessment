@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
-
 import { Exercise, ExerciseInstance, UserInstance } from '../models';
 import { Op, WhereOptions } from 'sequelize';
 
 async function getUsers(req: Request, res: Response) {
-  const users = await UserInstance.findAll();
-
-  res.status(200).json({ users });
+  try {
+    const users = await UserInstance.findAll();
+    res.status(200).json({ users });
+  } catch (error) {
+    console.error('Error getting users: ', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 }
 
 type CreateUserPayload = { username: string };
@@ -15,22 +18,33 @@ async function createUser(
   req: Request<{}, {}, CreateUserPayload>,
   res: Response
 ) {
-  const { username } = req.body;
+  try {
+    const { username } = req.body;
 
-  if (!username) {
-    res.status(401).json({ message: req.body });
+    if (!username) {
+      res.status(400).json({ message: 'Username is required' });
 
-    return;
+      return;
+    }
+
+    const existingUser = await UserInstance.findOne({ where: { username } });
+    if (existingUser) {
+      res.status(409).json({ message: 'Username already exists' });
+
+      return;
+    }
+
+    const newUserData = {
+      id: crypto.randomUUID(),
+      username,
+    };
+
+    const user = await UserInstance.create(newUserData);
+    res.status(201).json({ user });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
-
-  const newUserData = {
-    id: crypto.randomUUID(),
-    username,
-  };
-
-  const user = await UserInstance.create(newUserData);
-
-  res.status(201).json({ user });
 }
 
 type UserExerciseParams = {
@@ -47,53 +61,90 @@ async function createUserExercise(
   req: Request<UserExerciseParams, {}, CreateUserExercisePayload>,
   res: Response
 ) {
-  const { date, description, duration } = req.body;
+  try {
+    const { date, description, duration } = req.body;
+    const { id: userId } = req.params;
 
-  const newExerciseData: Exercise = {
-    description,
-    duration,
-    date,
-    userId: req.params.id,
-  };
+    if (!date || !description || !duration) {
+      res.status(400).json({ message: 'All exercise fields are required' });
 
-  const exercise = await ExerciseInstance.create(newExerciseData);
+      return;
+    }
 
-  res.status(201).json({ exercise });
+    const parsedDate = new Date(date);
+
+    if (isNaN(parsedDate.getTime())) {
+      res.status(400).json({ message: 'Invalid date format' });
+      return;
+    }
+
+    const user = await UserInstance.findByPk(userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+
+      return;
+    }
+
+    const newExerciseData: Exercise = {
+      description,
+      duration,
+      date,
+      userId,
+    };
+
+    const exercise = await ExerciseInstance.create(newExerciseData);
+    res.status(201).json({ exercise });
+  } catch (error) {
+    console.error('Error creating exercise: ', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 }
 
-type GetUserExercisesPayload = {
+type GetUserExercisesQuery = {
   from?: string;
   to?: string;
   limit?: number;
 };
 
 async function getUserExercises(
-  req: Request<UserExerciseParams, {}, GetUserExercisesPayload>,
+  req: Request<UserExerciseParams, {}, {}, GetUserExercisesQuery>,
   res: Response
 ) {
-  const { from, limit, to } = req.body;
-  const { id: userId } = req.params;
+  try {
+    const { from, limit, to } = req.query;
+    const { id: userId } = req.params;
 
-  const query: WhereOptions<Exercise> = { userId };
+    const user = await UserInstance.findByPk(userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
 
-  if (from && to) {
-    query.date = { [Op.between]: [from, to] };
-  } else {
-    if (from) {
-      query.date = { [Op.gte]: from, to };
+      return;
     }
 
-    if (to) {
-      query.date = { [Op.lte]: to };
+    const query: WhereOptions<Exercise> = { userId };
+
+    if (from && to) {
+      query.date = { [Op.between]: [from, to] };
+    } else {
+      if (from) {
+        query.date = { [Op.gte]: from };
+      }
+      if (to) {
+        query.date = { [Op.lte]: to };
+      }
     }
+
+
+    const exercises = await ExerciseInstance.findAll({
+      where: query,
+      limit,
+    });
+
+    res.status(200).json(exercises);
+  } catch (error) {
+    console.error('Error fetching exercises:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
-
-  const exercises = await ExerciseInstance.findAll({
-    where: query,
-    limit,
-  });
-
-  return res.status(200).json(exercises);
 }
 
 export default { getUsers, createUser, createUserExercise, getUserExercises };

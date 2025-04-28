@@ -8,4 +8,4 @@ userRouter.post('/', userController.createUser)
 
 userRouter.post('/:id/exercises', userController.createUserExercise)
 
-userRouter.post('/:id/logs', () => {})
+userRouter.get('/:id/logs', userController.getUserExercises)

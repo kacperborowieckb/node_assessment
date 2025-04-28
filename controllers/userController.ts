@@ -175,7 +175,7 @@ async function getUserExercises(
       where: query,
       order: [['date', 'ASC']],
       limit,
-      attributes: ['description', 'duration', 'date'],
+      attributes: ['description', 'duration', 'date', 'id'],
     });
 
     const { username, id } = user.dataValues;
@@ -184,7 +184,7 @@ async function getUserExercises(
       username,
       id,
       count,
-      exercises,
+      logs: exercises,
     });
   } catch (error) {
     console.error('Error fetching exercises:', error);

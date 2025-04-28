@@ -26,15 +26,17 @@ ExerciseInstance.init(
       allowNull: false,
     },
     duration: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.NUMBER,
       allowNull: false,
       validate: {
-        min: 0, 
+        min: 0.01, 
+        isNumeric: true,
       },
     },
     date: {
       type: DataTypes.DATEONLY, 
-      allowNull: false,
+      allowNull: true,
+      defaultValue: DataTypes.NOW
     },
   },
   {

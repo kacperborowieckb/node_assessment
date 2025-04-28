@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Exercise, ExerciseInstance, UserInstance } from '../models';
 import { Op, WhereOptions } from 'sequelize';
+import dayjs from 'dayjs';
 
 async function getUsers(req: Request, res: Response) {
   try {
@@ -39,8 +40,9 @@ async function createUser(
       username,
     };
 
-    const user = await UserInstance.create(newUserData);
-    res.status(201).json({ user });
+    await UserInstance.create(newUserData);
+    
+    res.status(201).json(newUserData);
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -52,7 +54,7 @@ type UserExerciseParams = {
 };
 
 type CreateUserExercisePayload = {
-  date: string;
+  date?: string;
   duration: number;
   description: string;
 };
@@ -65,36 +67,50 @@ async function createUserExercise(
     const { date, description, duration } = req.body;
     const { id: userId } = req.params;
 
-    if (!date || !description || !duration) {
+    if (!description || !duration) {
       res.status(400).json({ message: 'All exercise fields are required' });
 
       return;
     }
 
-    const parsedDate = new Date(date);
-
-    if (isNaN(parsedDate.getTime())) {
-      res.status(400).json({ message: 'Invalid date format' });
-      return;
-    }
-
     const user = await UserInstance.findByPk(userId);
+
     if (!user) {
       res.status(404).json({ message: 'User not found' });
 
       return;
     }
 
-    const newExerciseData: Exercise = {
+    const newExerciseData: Partial<Exercise> = {
       description,
-      duration,
-      date,
+      duration: Number(duration),
       userId,
     };
 
-    const exercise = await ExerciseInstance.create(newExerciseData);
-    res.status(201).json({ exercise });
-  } catch (error) {
+    if (date) {
+      const parsedDate = dayjs(date, 'YYYY-MM-DD', true);
+
+      if (!parsedDate.isValid()) {
+        res.status(400).json({ message: 'Invalid date' });
+        return;
+      }
+
+      newExerciseData.date = parsedDate.toISOString();
+    }
+
+    const exercise = await ExerciseInstance.create(newExerciseData as Exercise);
+
+    res.status(201).json({ ...exercise.dataValues, username: user.dataValues.username});
+  } catch (error: any) {
+    if (error.errors[0].type === 'Validation error') {
+      res.status(400).json({
+        message: 'Duration should be positive number greater or equal 0.01',
+      });
+      console.error('Error creating exercise: ', error);
+
+      return;
+    }
+
     console.error('Error creating exercise: ', error);
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -113,6 +129,23 @@ async function getUserExercises(
   try {
     const { from, limit, to } = req.query;
     const { id: userId } = req.params;
+
+    const isValidFrom = from ? dayjs(from, 'YYYY-MM-DD', true).isValid() : true;
+    const isValidTo = to ? dayjs(to, 'YYYY-MM-DD', true).isValid() : true;
+
+    const isLimitValid = limit ? !isNaN(Number(limit)) && Number(limit) > 0 && Number.isInteger(Number(limit)) : true;
+
+    if (!isValidFrom || !isValidTo) {
+      res.status(400).json({ message: 'Invalid date query params' });
+
+      return
+    }
+
+    if (!isLimitValid) {
+      res.status(400).json({ message: 'Limit query param should be positive integer' });
+
+      return
+    }
 
     const user = await UserInstance.findByPk(userId);
     if (!user) {
@@ -134,13 +167,25 @@ async function getUserExercises(
       }
     }
 
+    const count = await ExerciseInstance.count({
+      where: query,
+    });
 
     const exercises = await ExerciseInstance.findAll({
       where: query,
+      order: [['date', 'ASC']],
       limit,
+      attributes: ['description', 'duration', 'date'],
     });
 
-    res.status(200).json(exercises);
+    const { username, id } = user.dataValues;
+
+    res.status(200).json({
+      username,
+      id,
+      count,
+      exercises,
+    });
   } catch (error) {
     console.error('Error fetching exercises:', error);
     res.status(500).json({ message: 'Internal server error' });

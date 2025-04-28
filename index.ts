@@ -1,11 +1,14 @@
+import { AddressInfo } from 'net';
 import express, { Response } from 'express';
 import cors from 'cors';
-import { AddressInfo } from 'net';
+import dayjs from 'dayjs';
+import customParseFormat from "dayjs/plugin/customParseFormat"
 
 import db from './db/db';
 
 import { userRouter } from './routes';
-import bodyParser from 'body-parser';
+
+dayjs.extend(customParseFormat);
 
 db.sync().then(() => {
   console.log("Connected to db")
